@@ -10,4 +10,7 @@ def test_decoder_with_fake_spikes() -> None:
     assert metrics.spikes_per_second == 6
     assert metrics.active_channels_count == 6
     assert 0 <= metrics.channel_entropy <= 1
+    assert metrics.adapter_latency_ms == 0
+    assert metrics.tick_rate == 0
     assert action.primary_action in action.action_vector
+    assert "clean_atmosphere" in action.action_vector

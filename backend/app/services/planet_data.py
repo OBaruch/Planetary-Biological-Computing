@@ -15,6 +15,7 @@ class _EventBias:
     name: str
     intensity: float
     ttl_ticks: int
+    original_ttl_ticks: int
 
 
 class PlanetDataProvider:
@@ -28,9 +29,12 @@ class PlanetDataProvider:
         self._biases: list[_EventBias] = []
 
     def inject_event(self, event: DemoEventRequest) -> str:
-        ttl = 90 if event.type in {"heatwave", "conflict", "renewable_boost"} else 60
-        self._biases.append(_EventBias(event.type, event.intensity, ttl))
-        return f"{event.type.replace('_', ' ').title()} injected at {event.intensity:.2f} intensity"
+        ttl = max(1, int(event.duration_seconds * 10))
+        self._biases.append(_EventBias(event.type, event.intensity, ttl, ttl))
+        return (
+            f"{event.type.replace('_', ' ').title()} injected at {event.intensity:.2f} "
+            f"intensity for {event.duration_seconds:.0f}s"
+        )
 
     def next(self) -> PlanetInputs:
         if self.use_live_data:
@@ -49,13 +53,20 @@ class PlanetDataProvider:
         global_temperature_anomaly = 1.15 + 0.18 * slow + 0.08 * fast + event["heat"]
         co2_ppm = 424.0 + 2.5 * slow + event["human"] * 4.0
         methane_index = clamp(0.58 + 0.08 * daily + event["human"] * 0.18)
-        ocean_temperature_index = clamp(0.52 + 0.12 * slow + event["heat"] * 0.25)
+        ocean_temperature_index = clamp(0.52 + 0.12 * slow + event["heat"] * 0.25 - event["ocean"] * 0.22)
         sea_level_index = clamp(0.46 + 0.06 * slow + normalize(co2_ppm, 380, 460) * 0.18)
-        air_quality_index = clamp(0.45 + 0.12 * fast + event["wildfire"] * 0.42 + event["human"] * 0.12)
+        air_quality_index = clamp(
+            0.45
+            + 0.12 * fast
+            + event["wildfire"] * 0.42
+            + event["human"] * 0.12
+            + event["pollution"] * 0.42
+            - event["biodiversity"] * 0.12
+        )
         wildfire_risk_index = clamp(0.34 + 0.18 * daily + event["wildfire"] + event["heat"] * 0.35)
         drought_index = clamp(0.38 + 0.11 * slow + event["heat"] * 0.28)
         precipitation_index = clamp(0.52 + 0.12 * math.cos(elapsed / 10.0) - event["heat"] * 0.15)
-        storm_intensity_index = clamp(0.33 + 0.2 * abs(fast) + event["chaos"] * 0.28)
+        storm_intensity_index = clamp(0.33 + 0.2 * abs(fast) + event["chaos"] * 0.28 + event["solar"] * 0.32)
 
         earthquake_frequency = clamp(0.18 + self._rng.random() * 0.07 + event["earthquake"] * 0.65)
         earthquake_magnitude = clamp(0.12 + event["earthquake"] * 0.82 + self._rng.random() * 0.08) * 8.5
@@ -65,12 +76,17 @@ class PlanetDataProvider:
         renewable_energy_ratio = clamp(0.33 + 0.06 * slow + event["renewable"] * 0.48)
         air_traffic_index = clamp(0.55 + 0.1 * math.cos(elapsed / 9.0) + event["human"] * 0.1)
         urban_activity_index = clamp(0.64 + 0.06 * fast + event["human"] * 0.18)
-        internet_activity_index = clamp(0.71 + 0.05 * abs(fast) + event["cooperation"] * 0.07)
+        internet_activity_index = clamp(0.71 + 0.05 * abs(fast) + event["cooperation"] * 0.07 + event["solar"] * 0.08)
 
         global_news_tension_index = clamp(0.4 + 0.12 * fast + event["conflict"] * 0.5 - event["cooperation"] * 0.16)
         sentiment_index = clamp(0.5 + 0.12 * slow + event["cooperation"] * 0.28 - event["conflict"] * 0.25)
         conflict_index = clamp(0.34 + 0.08 * daily + event["conflict"] * 0.55)
-        cooperation_index = clamp(0.45 + 0.08 * math.cos(elapsed / 14.0) + event["cooperation"] * 0.42)
+        cooperation_index = clamp(
+            0.45
+            + 0.08 * math.cos(elapsed / 14.0)
+            + event["cooperation"] * 0.42
+            + event["biodiversity"] * 0.14
+        )
 
         climate_pressure_score = clamp(
             normalize(global_temperature_anomaly, -0.5, 2.5) * 0.24
@@ -103,6 +119,20 @@ class PlanetDataProvider:
             + conflict_index * 0.08
         )
         biosphere_stability_score = clamp(1.0 - planetary_stress_score * 0.62 + recovery_potential_score * 0.28)
+        chaos_score = clamp(
+            storm_intensity_index * 0.2
+            + earthquake_frequency * 0.14
+            + global_news_tension_index * 0.2
+            + conflict_index * 0.22
+            + planetary_stress_score * 0.24
+        )
+        resilience_score = clamp(
+            biosphere_stability_score * 0.34
+            + recovery_potential_score * 0.3
+            + cooperation_index * 0.18
+            + renewable_energy_ratio * 0.18
+            - chaos_score * 0.12
+        )
 
         return PlanetInputs(
             source_mode=source_mode,
@@ -133,6 +163,8 @@ class PlanetDataProvider:
             climate_pressure_score=round(climate_pressure_score, 4),
             human_pressure_score=round(human_pressure_score, 4),
             recovery_potential_score=round(recovery_potential_score, 4),
+            chaos_score=round(chaos_score, 4),
+            resilience_score=round(resilience_score, 4),
             active_events=[bias.name for bias in self._biases],
         )
 
@@ -146,10 +178,14 @@ class PlanetDataProvider:
             "cooperation": 0.0,
             "renewable": 0.0,
             "chaos": 0.0,
+            "ocean": 0.0,
+            "pollution": 0.0,
+            "biodiversity": 0.0,
+            "solar": 0.0,
         }
         remaining: list[_EventBias] = []
         for bias in self._biases:
-            decay = bias.ttl_ticks / 90.0
+            decay = bias.ttl_ticks / max(1, bias.original_ttl_ticks)
             amount = clamp(bias.intensity * decay)
             if bias.name == "heatwave":
                 effects["heat"] += amount * 0.45
@@ -170,6 +206,19 @@ class PlanetDataProvider:
             elif bias.name == "renewable_boost":
                 effects["renewable"] += amount
                 effects["cooperation"] += amount * 0.18
+            elif bias.name == "ocean_recovery":
+                effects["ocean"] += amount
+                effects["cooperation"] += amount * 0.12
+            elif bias.name == "pollution_spike":
+                effects["pollution"] += amount
+                effects["human"] += amount * 0.18
+                effects["chaos"] += amount * 0.16
+            elif bias.name == "biodiversity_gain":
+                effects["biodiversity"] += amount
+                effects["cooperation"] += amount * 0.18
+            elif bias.name == "solar_storm":
+                effects["solar"] += amount
+                effects["chaos"] += amount * 0.4
             bias.ttl_ticks -= 1
             if bias.ttl_ticks > 0:
                 remaining.append(bias)

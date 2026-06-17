@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
+import time
 from collections import deque
 from datetime import datetime, timezone
 
 from app.api.websocket import LiveBroadcaster
 from app.config import Settings
-from app.models.api import DemoEventRequest
+from app.models.api import ConfigResponse, DemoEventRequest, SessionSummary, SimulationStatus
 from app.models.neural import DecodedAction, NeuralMetrics, StimulationIntent
 from app.models.planet import PlanetState, SimulationFrame
 from app.services.cortical_simulator_adapter import CorticalSimulatorAdapter
@@ -45,6 +47,10 @@ class SimulationRunner:
         self._lock = asyncio.Lock()
         self._tick = 0
         self._running = False
+        self._created_at = datetime.now(timezone.utc)
+        self._started_at: datetime | None = None
+        self._last_error: str | None = None
+        self._loop_started_monotonic: float | None = None
 
     @property
     def running(self) -> bool:
@@ -60,21 +66,30 @@ class SimulationRunner:
     def adapter_status(self) -> str:
         return self.adapter.status if self.adapter else "not started"
 
+    @property
+    def cl_sdk_available(self) -> bool:
+        return importlib.util.find_spec("cl") is not None
+
     async def start(self) -> str:
         async with self._lock:
             if self._running:
                 return "Simulation already running"
             self.adapter = self._create_adapter()
             try:
+                logger.info("[GAIA] Starting simulation session_id=%s", self.session_id)
                 self.adapter.start()
+                logger.info("[GAIA] Neural adapter mode=%s", self.adapter.mode_label)
             except Exception as exc:
                 if not self.settings.allow_fallback:
                     self.adapter = None
                     raise
-                logger.warning("CL SDK simulator unavailable, using fallback synthetic adapter: %s", exc)
+                logger.warning("[GAIA] Falling back to synthetic adapter because CL SDK failed: %s", exc)
                 self.adapter = FallbackSyntheticAdapter()
                 self.adapter.start()
             self._running = True
+            self._started_at = datetime.now(timezone.utc)
+            self._loop_started_monotonic = time.monotonic()
+            self._last_error = None
             self._task = asyncio.create_task(self._loop(), name="gaia-simulation-loop")
             return f"Simulation started in {self.adapter.mode_label}"
 
@@ -94,6 +109,7 @@ class SimulationRunner:
                 pass
         if self.adapter:
             self.adapter.stop()
+        logger.info("[GAIA] Simulation stopped cleanly session_id=%s", self.session_id)
         return "Simulation stopped"
 
     async def reset(self) -> str:
@@ -105,6 +121,7 @@ class SimulationRunner:
             self.simulation = PlanetSimulation()
             self.history.clear()
             self._tick = 0
+            self._last_error = None
             self.latest = self._idle_frame()
         if was_running:
             await self.start()
@@ -112,6 +129,7 @@ class SimulationRunner:
 
     async def inject_demo_event(self, event: DemoEventRequest) -> str:
         message = self.provider.inject_event(event)
+        logger.info("[GAIA] Demo event injected type=%s intensity=%.2f", event.type, event.intensity)
         return message
 
     async def get_state(self) -> SimulationFrame:
@@ -128,6 +146,56 @@ class SimulationRunner:
     async def shutdown(self) -> None:
         await self.stop()
         self.logger.close()
+
+    async def get_status(self) -> SimulationStatus:
+        async with self._lock:
+            history_size = len(self.history)
+            ticks = self._tick
+            last_error = self._last_error
+            started_at = self._started_at
+        adapter_metrics = self.adapter.get_metrics() if self.adapter else {"mode": self.mode, "running": False}
+        return SimulationStatus(
+            running=self.running,
+            mode=self.mode,
+            session_id=self.session_id,
+            started_at=started_at,
+            ticks=ticks,
+            last_error=last_error,
+            adapter_status=self.adapter_status,
+            adapter_metrics=adapter_metrics,
+            history_size=history_size,
+            history_limit=self.settings.history_limit,
+            websocket_clients=self.broadcaster.client_count,
+            uptime_seconds=round((datetime.now(timezone.utc) - self._created_at).total_seconds(), 3),
+        )
+
+    def get_config(self) -> ConfigResponse:
+        return ConfigResponse(
+            version=self.settings.app_version,
+            gaia_mode=self.settings.gaia_mode,
+            ticks_per_second=self.settings.ticks_per_second,
+            history_limit=self.settings.history_limit,
+            use_live_data=self.settings.use_live_data,
+            allow_fallback=self.settings.allow_fallback,
+            log_to_file=self.settings.log_to_file,
+            cors_origins=list(self.settings.cors_origins),
+            cl_sdk_available=self.cl_sdk_available,
+        )
+
+    def list_sessions(self) -> list[SessionSummary]:
+        sessions_dir = self.settings.data_dir / "sessions"
+        items: list[SessionSummary] = []
+        for path in sorted(sessions_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True):
+            stat = path.stat()
+            items.append(
+                SessionSummary(
+                    session_id=path.stem,
+                    path=str(path),
+                    size_bytes=stat.st_size,
+                    modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+                )
+            )
+        return items[:100]
 
     def _create_adapter(self) -> NeuralAdapter:
         if self.settings.gaia_mode == "fallback":
@@ -149,6 +217,7 @@ class SimulationRunner:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                self._last_error = str(exc)
                 logger.exception("Simulation loop error: %s", exc)
             elapsed = asyncio.get_running_loop().time() - started
             await asyncio.sleep(max(0.0, interval - elapsed))
@@ -159,8 +228,19 @@ class SimulationRunner:
         planet_inputs = self.provider.next()
         intent = self.encoder.encode(planet_inputs)
         self.adapter.send_stimulation_intent(intent, planet_inputs)
+        read_started = time.perf_counter()
         spikes = self.adapter.read_tick()
-        metrics, action = self.decoder.decode(spikes, planet_inputs)
+        latency_ms = (time.perf_counter() - read_started) * 1000
+        actual_tick_rate = 0.0
+        if self._loop_started_monotonic is not None:
+            elapsed = max(time.monotonic() - self._loop_started_monotonic, 0.001)
+            actual_tick_rate = self._tick / elapsed
+        metrics, action = self.decoder.decode(
+            spikes,
+            planet_inputs,
+            adapter_latency_ms=latency_ms,
+            tick_rate=actual_tick_rate,
+        )
         planet_state = self.simulation.step(planet_inputs, metrics, action)
         events = self._frame_events(planet_inputs.active_events, action, planet_state)
         return SimulationFrame(

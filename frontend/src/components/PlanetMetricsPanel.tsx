@@ -17,6 +17,8 @@ export function PlanetMetricsPanel({ frame }: { frame: SimulationFrame }) {
       <MetricBar label="Human Pressure" value={state.human_pressure} tone="danger" />
       <MetricBar label="Chaos Level" value={state.chaos} tone="danger" />
       <MetricBar label="Recovery Potential" value={state.recovery} tone="cool" />
+      <MetricBar label="Derived Chaos Score" value={inputs.chaos_score} tone="danger" />
+      <MetricBar label="Derived Resilience Score" value={inputs.resilience_score} tone="cool" />
       <div className="compact-grid">
         <span>CO2</span>
         <strong>{Math.round(inputs.co2_ppm)} ppm</strong>

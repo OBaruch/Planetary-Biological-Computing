@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).resolve().parents[2]
 BACKEND_DIR = ROOT_DIR / "backend"
 DATA_DIR = BACKEND_DIR / "data"
+APP_VERSION = "0.2.0"
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -41,6 +42,7 @@ def _float_env(name: str, default: float) -> float:
 
 @dataclass(frozen=True)
 class Settings:
+    app_version: str = APP_VERSION
     gaia_mode: str = "simulator"
     ticks_per_second: int = 10
     history_limit: int = 1000

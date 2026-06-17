@@ -390,6 +390,15 @@ h1 {
   background: rgba(155, 224, 207, 0.13);
 }
 
+.command-feedback {
+  margin: 12px 0 0;
+  border-top: 1px solid rgba(214, 234, 228, 0.12);
+  padding-top: 10px;
+  color: #ffe4b5;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 1180px) {
   .topbar,
   .dashboard-grid {

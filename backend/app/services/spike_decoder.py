@@ -20,7 +20,13 @@ class SpikeDecoder:
     def __init__(self, window_seconds: float = 1.0) -> None:
         self.window_seconds = window_seconds
 
-    def decode(self, spikes: list[NeuralSpike], planet: PlanetInputs) -> tuple[NeuralMetrics, DecodedAction]:
+    def decode(
+        self,
+        spikes: list[NeuralSpike],
+        planet: PlanetInputs,
+        adapter_latency_ms: float = 0.0,
+        tick_rate: float = 0.0,
+    ) -> tuple[NeuralMetrics, DecodedAction]:
         count = len(spikes)
         active_channels = {spike.channel for spike in spikes}
         channel_counts = Counter(spike.channel for spike in spikes)
@@ -48,6 +54,8 @@ class SpikeDecoder:
             chaos_signal=round(chaos_signal, 4),
             recovery_signal=round(recovery_signal, 4),
             recent_spike_count=count,
+            adapter_latency_ms=round(adapter_latency_ms, 3),
+            tick_rate=round(tick_rate, 3),
         )
         action = self._action(metrics, planet)
         return metrics, action
@@ -65,6 +73,7 @@ class SpikeDecoder:
             "calm_human_pressure": 0.0,
             "amplify_chaos": 0.0,
             "stabilize_oceans": 0.0,
+            "clean_atmosphere": 0.0,
             "trigger_visual_pulse": metrics.neural_activity_level,
         }
         if climate:
@@ -73,9 +82,11 @@ class SpikeDecoder:
         elif recovery:
             actions["restore_biosphere"] = clamp(metrics.recovery_signal * 0.85 + planet.recovery_potential_score * 0.15)
             actions["stabilize_oceans"] = clamp(metrics.recovery_signal * 0.45)
+            actions["clean_atmosphere"] = clamp((1.0 - planet.air_quality_index) * 0.28 + metrics.recovery_signal * 0.2)
         elif human:
             actions["calm_human_pressure"] = clamp((1.0 - metrics.chaos_signal) * 0.45 + planet.human_pressure_score * 0.35)
             actions["degrade_biosphere"] = clamp(planet.human_pressure_score * 0.18)
+            actions["clean_atmosphere"] = clamp((1.0 - planet.air_quality_index) * 0.18)
         elif chaos:
             actions["amplify_chaos"] = clamp(metrics.chaos_signal * 0.92 + planet.conflict_index * 0.08)
             actions["heat_planet"] = clamp(planet.climate_pressure_score * 0.22 + metrics.burstiness_score * 0.25)

@@ -35,6 +35,8 @@ export interface PlanetInputs {
   climate_pressure_score: number;
   human_pressure_score: number;
   recovery_potential_score: number;
+  chaos_score: number;
+  resilience_score: number;
   active_events: string[];
 }
 
@@ -73,6 +75,8 @@ export interface NeuralMetrics {
   chaos_signal: number;
   recovery_signal: number;
   recent_spike_count: number;
+  adapter_latency_ms: number;
+  tick_rate: number;
 }
 
 export interface DecodedAction {
@@ -102,4 +106,22 @@ export type DemoEventType =
   | "heatwave"
   | "good_news"
   | "conflict"
-  | "renewable_boost";
+  | "renewable_boost"
+  | "ocean_recovery"
+  | "pollution_spike"
+  | "biodiversity_gain"
+  | "solar_storm";
+
+export interface SimulationStatus {
+  running: boolean;
+  mode: string;
+  session_id: string;
+  started_at: string | null;
+  ticks: number;
+  last_error: string | null;
+  adapter_status: string;
+  history_size: number;
+  history_limit: number;
+  websocket_clients: number;
+  uptime_seconds: number;
+}

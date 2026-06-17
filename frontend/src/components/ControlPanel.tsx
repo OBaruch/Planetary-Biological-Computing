@@ -1,4 +1,18 @@
-import { Flame, HeartPulse, Mountain, Play, RefreshCcw, Square, SunMedium, Wind, Zap } from "lucide-react";
+import {
+  Biohazard,
+  Bug,
+  Flame,
+  HeartPulse,
+  Mountain,
+  Play,
+  RefreshCcw,
+  Sparkles,
+  Square,
+  SunMedium,
+  Waves,
+  Wind,
+  Zap
+} from "lucide-react";
 import type { DemoEventType } from "../api/types";
 
 interface Props {
@@ -6,10 +20,11 @@ interface Props {
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
-  onEvent: (type: DemoEventType, intensity?: number) => void;
+  onEvent: (type: DemoEventType, intensity?: number, durationSeconds?: number) => void;
+  lastCommand?: string | null;
 }
 
-export function ControlPanel({ running, onStart, onStop, onReset, onEvent }: Props) {
+export function ControlPanel({ running, onStart, onStop, onReset, onEvent, lastCommand }: Props) {
   return (
     <section className="panel control-panel" aria-label="Simulation controls">
       <div className="panel-heading">
@@ -49,7 +64,24 @@ export function ControlPanel({ running, onStart, onStop, onReset, onEvent }: Pro
           <Zap size={17} />
           Conflict Spike
         </button>
+        <button type="button" onClick={() => onEvent("ocean_recovery", 0.82)} title="Inject ocean recovery">
+          <Waves size={17} />
+          Ocean Recovery
+        </button>
+        <button type="button" onClick={() => onEvent("pollution_spike", 0.84)} title="Inject pollution spike">
+          <Biohazard size={17} />
+          Pollution Spike
+        </button>
+        <button type="button" onClick={() => onEvent("biodiversity_gain", 0.78)} title="Inject biodiversity gain">
+          <Bug size={17} />
+          Biodiversity Gain
+        </button>
+        <button type="button" onClick={() => onEvent("solar_storm", 0.76)} title="Inject solar storm">
+          <Sparkles size={17} />
+          Solar Storm
+        </button>
       </div>
+      {lastCommand ? <p className="command-feedback">{lastCommand}</p> : null}
     </section>
   );
 }

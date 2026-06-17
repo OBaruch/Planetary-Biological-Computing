@@ -37,6 +37,7 @@ class PlanetSimulation:
         calm = vector.get("calm_human_pressure", 0.0)
         chaos_amp = vector.get("amplify_chaos", 0.0)
         ocean_stability = vector.get("stabilize_oceans", 0.0)
+        clean_atmosphere = vector.get("clean_atmosphere", 0.0)
 
         target_temperature = clamp(
             normalize(inputs.global_temperature_anomaly, -0.5, 2.5) * 0.58
@@ -64,12 +65,14 @@ class PlanetSimulation:
             (1.0 - inputs.air_quality_index) * 0.48
             + inputs.renewable_energy_ratio * 0.26
             + calm * 0.14
+            + clean_atmosphere * 0.22
             - inputs.wildfire_risk_index * 0.12
             + noise(0.012)
         )
         target_human_pressure = clamp(inputs.human_pressure_score * 0.72 - calm * 0.22 + chaos_amp * 0.08 + noise(0.01))
         target_chaos = clamp(
-            inputs.planetary_stress_score * 0.48
+            inputs.chaos_score * 0.34
+            + inputs.planetary_stress_score * 0.28
             + metrics.chaos_signal * 0.28
             + chaos_amp * 0.22
             - calm * 0.1
@@ -77,7 +80,8 @@ class PlanetSimulation:
         )
         target_recovery = clamp(inputs.recovery_potential_score * 0.54 + metrics.recovery_signal * 0.28 + restore * 0.22)
         target_resilience = clamp(
-            target_biosphere * 0.32
+            inputs.resilience_score * 0.18
+            + target_biosphere * 0.26
             + target_ocean * 0.22
             + target_atmosphere * 0.18
             + target_recovery * 0.2

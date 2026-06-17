@@ -42,6 +42,8 @@ class PlanetInputs(BaseModel):
     climate_pressure_score: float
     human_pressure_score: float
     recovery_potential_score: float
+    chaos_score: float
+    resilience_score: float
 
     active_events: list[str] = Field(default_factory=list)
 

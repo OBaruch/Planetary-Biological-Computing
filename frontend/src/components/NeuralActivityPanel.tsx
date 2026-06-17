@@ -23,6 +23,14 @@ export function NeuralActivityPanel({ frame }: { frame: SimulationFrame }) {
           <span>Active Channels</span>
           <strong>{metrics.active_channels_count}</strong>
         </div>
+        <div>
+          <span>Adapter Latency</span>
+          <strong>{metrics.adapter_latency_ms.toFixed(1)} ms</strong>
+        </div>
+        <div>
+          <span>Tick Rate</span>
+          <strong>{metrics.tick_rate.toFixed(1)}</strong>
+        </div>
       </div>
       <MetricBar label="Neural Entropy" value={metrics.channel_entropy} tone="signal" />
       <MetricBar label="Synchrony" value={metrics.synchrony_score} tone="cool" />

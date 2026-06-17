@@ -43,6 +43,8 @@ class NeuralMetrics(BaseModel):
     chaos_signal: float = Field(ge=0.0, le=1.0)
     recovery_signal: float = Field(ge=0.0, le=1.0)
     recent_spike_count: int = Field(ge=0)
+    adapter_latency_ms: float = Field(default=0.0, ge=0.0)
+    tick_rate: float = Field(default=0.0, ge=0.0)
 
 
 class DecodedAction(BaseModel):

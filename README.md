@@ -19,6 +19,7 @@ It includes:
 - Planet encoder, spike decoder, planet simulation, local session logging.
 - Vite + React + TypeScript dashboard with a Three.js Earth visualization.
 - Basic backend tests.
+- Operational status/config/session endpoints and developer smoke-test scripts.
 
 ## What This Is Not
 
@@ -80,6 +81,8 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173).
 
+If `5173` is already in use, Vite can run on another port such as `5174`; the backend CORS defaults allow both.
+
 ## Scripts
 
 PowerShell helpers are included:
@@ -87,6 +90,14 @@ PowerShell helpers are included:
 ```powershell
 .\scripts\run_backend.ps1
 .\scripts\run_frontend.ps1
+```
+
+Python helpers:
+
+```bash
+python scripts/check_env.py
+python scripts/run_backend.py
+python scripts/smoke_test.py
 ```
 
 Unix-like systems can use the `Makefile`:
@@ -122,8 +133,11 @@ CL SDK simulator values:
 
 - `GET /`
 - `GET /health`
+- `GET /api/status`
 - `GET /api/state`
 - `GET /api/history?limit=200`
+- `GET /api/config`
+- `GET /api/sessions`
 - `POST /api/control/start`
 - `POST /api/control/stop`
 - `POST /api/control/reset`
@@ -135,7 +149,8 @@ Demo event body:
 ```json
 {
   "type": "wildfire",
-  "intensity": 0.8
+  "intensity": 0.8,
+  "duration_seconds": 30
 }
 ```
 
@@ -147,6 +162,18 @@ Allowed event types:
 - `good_news`
 - `conflict`
 - `renewable_boost`
+- `ocean_recovery`
+- `pollution_spike`
+- `biodiversity_gain`
+- `solar_storm`
+
+## Troubleshooting
+
+- If `cl-sdk` is unavailable, set `GAIA_ALLOW_FALLBACK=true`; the backend will report `Fallback Synthetic Mode`.
+- If the CL SDK simulator reports timing jitter, lower `GAIA_TICKS_PER_SECOND` or keep `CL_SDK_VISUALISATION=0` for backend demos.
+- If the frontend cannot connect, check `VITE_API_BASE_URL`, `VITE_WS_URL`, and CORS origins.
+- If port `5173` is occupied, run `npm run dev -- --port 5174`.
+- If `/api/state` returns tick `0`, call `POST /api/control/start` or use the frontend Start button.
 
 ## Logs And Recordings
 
@@ -185,6 +212,12 @@ The current simulator adapter already keeps the same high-level flow: open `cl`,
 - Add exportable demo sessions with charts.
 - Add a Cloud/CL1 adapter once access and deployment details are available.
 - Add stronger experiment-safety review controls before any real biological stimulation.
+
+More detail:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Ethics And Limitations](docs/ETHICS_AND_LIMITATIONS.md)
+- [Roadmap](docs/ROADMAP.md)
 
 ## References
 

@@ -18,6 +18,9 @@ def test_planet_simulation_step() -> None:
 
 def test_demo_event_injection() -> None:
     client = TestClient(app)
-    response = client.post("/api/control/demo-event", json={"type": "wildfire", "intensity": 0.8})
+    response = client.post(
+        "/api/control/demo-event",
+        json={"type": "wildfire", "intensity": 0.8, "duration_seconds": 12},
+    )
     assert response.status_code == 200
     assert response.json()["ok"] is True
