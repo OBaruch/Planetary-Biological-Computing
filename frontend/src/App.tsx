@@ -7,7 +7,14 @@ import { EthicsBanner } from "./components/EthicsBanner";
 import { EventTimeline } from "./components/EventTimeline";
 import { NeuralActivityPanel } from "./components/NeuralActivityPanel";
 import { PlanetMetricsPanel } from "./components/PlanetMetricsPanel";
-import { PlanetView } from "./components/PlanetView";
+import { EventDetailPanel } from "./components/Panels/EventDetailPanel";
+import { GlobalEventsPanel } from "./components/Panels/GlobalEventsPanel";
+import { SettingsButton } from "./components/Settings/SettingsButton";
+import { SettingsPanel } from "./components/Settings/SettingsPanel";
+import { RealTimeEarthGlobe } from "./components/Visuals/RealTimeEarthGlobe";
+import { useGeoEvents } from "./hooks/useGeoEvents";
+import { useSources } from "./hooks/useSources";
+import type { GeoPlanetEvent } from "./types/geoEvents";
 
 type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnected" | "error";
 type ControlResponse = { message?: string; running?: boolean };
@@ -18,6 +25,9 @@ function App() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [running, setRunning] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const sources = useSources();
   const reconnectRef = useRef<number | null>(null);
   const pollingRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -105,6 +115,11 @@ function App() {
   }, []);
 
   const latest = useMemo(() => frame ?? history.at(-1) ?? null, [frame, history]);
+  const geo = useGeoEvents(latest?.events_geo, sources.dataMode);
+
+  function selectEvent(event: GeoPlanetEvent) {
+    setSelectedEventId((current) => (current === event.id ? null : event.id));
+  }
 
   async function runCommand(command: "start" | "stop" | "reset") {
     try {
@@ -146,6 +161,8 @@ function App() {
     );
   }
 
+  const selectedEvent = geo.events.find((event) => event.id === selectedEventId) ?? null;
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -157,13 +174,20 @@ function App() {
             spikes are decoded into planetary actions. Designed for future CL1/Cortical Cloud deployment.
           </p>
         </div>
-        <ConnectionStatus
-          connectionState={connectionState}
-          mode={latest.mode}
-          status={latest.adapter_status}
-          tick={latest.tick}
-          running={running}
-        />
+        <div className="topbar-controls">
+          <SettingsButton
+            onClick={() => setSettingsOpen(true)}
+            activeCount={sources.activeCount}
+            totalCount={sources.totalCount}
+          />
+          <ConnectionStatus
+            connectionState={connectionState}
+            mode={latest.mode}
+            status={latest.adapter_status}
+            tick={latest.tick}
+            running={running}
+          />
+        </div>
       </header>
 
       <EthicsBanner />
@@ -180,12 +204,51 @@ function App() {
             lastCommand={lastCommand}
           />
         </div>
-        <PlanetView state={latest.planet_state} />
+        <section className="planet-stage globe-stage" aria-label="Real-time living Earth globe">
+          <RealTimeEarthGlobe
+            events={geo.events}
+            planetState={latest.planet_state}
+            neuralMetrics={latest.neural_metrics}
+            decodedAction={latest.decoded_action}
+            autoRotate
+            selectedEventId={selectedEventId}
+            onSelectEvent={selectEvent}
+          />
+          <div className="globe-overlay-top">
+            <span className={`globe-source-badge ${geo.hasLive ? "live" : "sim"}`}>
+              <span className="dot" />
+              {sources.dataMode === "demo"
+                ? "Demo mode · simulated events"
+                : geo.events.length
+                  ? `Live · ${geo.liveSources.length ? geo.liveSources.join(", ") : `${sources.activeCount} sensors`}`
+                  : `${sources.activeCount}/${sources.totalCount} sensors active · awaiting data`}
+            </span>
+          </div>
+          <p className="globe-microcopy">
+            GAIA-1 visualizes planetary signals, stimulation intents, simulated neural spikes and decoded planetary
+            actions in real time. This version uses simulated neural activity unless explicitly connected to a real
+            CL1/Cortical Cloud session.
+          </p>
+          <div className="planet-readout">
+            <span>{latest.planet_state.planetary_mood_label}</span>
+            <strong>{Math.round(latest.planet_state.resilience * 100)}% resilience</strong>
+          </div>
+          <EventDetailPanel event={selectedEvent} onClose={() => setSelectedEventId(null)} />
+        </section>
         <div className="right-stack">
+          <GlobalEventsPanel
+            events={geo.events}
+            selectedEventId={selectedEventId}
+            onSelect={selectEvent}
+            mode={geo.mode}
+            source={geo.source}
+          />
           <NeuralActivityPanel frame={latest} />
           <EventTimeline frames={history.length ? history : [latest]} />
         </div>
       </section>
+
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} state={sources} />
     </main>
   );
 }

@@ -165,6 +165,7 @@ h1 {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+  min-width: 0;
   margin-bottom: 14px;
   color: #d7e8e0;
 }
@@ -190,12 +191,17 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   color: #aac2b9;
   font-size: 0.84rem;
 }
 
 .metric-label strong {
   color: #f1f6f3;
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .meter {
@@ -231,7 +237,7 @@ h1 {
 .compact-grid,
 .neural-kpis {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -291,13 +297,39 @@ h1 {
 
 .neural-kpis {
   margin-bottom: 14px;
+  grid-auto-rows: 78px;
 }
 
 .neural-kpis div {
+  min-width: 0;
+  display: grid;
+  align-content: space-between;
   border: 1px solid rgba(212, 236, 228, 0.14);
   border-radius: 8px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.035);
+}
+
+.neural-panel {
+  min-width: 0;
+}
+
+.neural-panel .panel-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, 42%);
+  min-height: 20px;
+}
+
+.neural-panel .panel-heading span,
+.neural-panel .panel-heading strong,
+.neural-kpis span,
+.neural-kpis strong,
+.intent-box strong,
+.intent-box small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .neural-kpis span,
@@ -311,22 +343,27 @@ h1 {
   display: block;
   margin-top: 6px;
   font-size: 1.45rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .intent-box {
   margin-top: 12px;
   border-top: 1px solid rgba(214, 234, 228, 0.12);
   padding-top: 12px;
+  min-height: 76px;
 }
 
 .intent-box strong {
   display: block;
+  height: 22px;
   margin: 5px 0;
   color: #ffe4b5;
   text-transform: capitalize;
 }
 
 .intent-box small {
+  display: block;
   color: #9cb4ab;
   line-height: 1.35;
 }

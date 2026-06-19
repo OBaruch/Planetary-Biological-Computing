@@ -49,6 +49,9 @@ class Settings:
     log_to_file: bool = True
     session_name: str = "local_demo"
     use_live_data: bool = False
+    # "live" = strict real-data mode (only configured sources are shown).
+    # "demo" = legacy simulated planet + demo globe events.
+    data_mode: str = "live"
     allow_fallback: bool = True
     autostart: bool = False
     enable_cl_recording: bool = False
@@ -62,6 +65,10 @@ class Settings:
         "http://127.0.0.1:5174",
     )
     data_dir: Path = DATA_DIR
+
+    @property
+    def credentials_path(self) -> Path:
+        return self.data_dir / "credentials.json"
 
 
 def load_settings() -> Settings:
@@ -81,6 +88,7 @@ def load_settings() -> Settings:
         log_to_file=_bool_env("GAIA_LOG_TO_FILE", True),
         session_name=os.getenv("GAIA_SESSION_NAME", "local_demo").strip() or "local_demo",
         use_live_data=_bool_env("GAIA_USE_LIVE_DATA", False),
+        data_mode=(os.getenv("GAIA_DATA_MODE", "live").strip().lower() or "live"),
         allow_fallback=_bool_env("GAIA_ALLOW_FALLBACK", True),
         autostart=_bool_env("GAIA_AUTOSTART", False),
         enable_cl_recording=_bool_env("GAIA_ENABLE_CL_RECORDING", False),
