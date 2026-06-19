@@ -72,6 +72,7 @@ class SimulationStatus(BaseModel):
 class ConfigResponse(BaseModel):
     version: str
     gaia_mode: str
+    data_mode: str
     ticks_per_second: int
     history_limit: int
     use_live_data: bool

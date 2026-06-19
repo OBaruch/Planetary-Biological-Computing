@@ -1,3 +1,5 @@
+import type { GeoPlanetEvent } from "../types/geoEvents";
+
 export type ChannelGroup =
   | "climate_regulation"
   | "biosphere_recovery"
@@ -98,6 +100,9 @@ export interface SimulationFrame {
   decoded_action: DecodedAction;
   planet_state: PlanetState;
   events: string[];
+  events_geo?: GeoPlanetEvent[];
+  /** Maps each real-backed planet-input field to the source_id behind it. */
+  signal_provenance?: Record<string, string>;
 }
 
 export type DemoEventType =

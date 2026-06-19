@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
+from app.models.geo_event import GeoPlanetEvent
 from app.models.neural import DecodedAction, NeuralMetrics, StimulationIntent
 
 
@@ -73,3 +74,7 @@ class SimulationFrame(BaseModel):
     decoded_action: DecodedAction
     planet_state: PlanetState
     events: list[str]
+    events_geo: list[GeoPlanetEvent] = Field(default_factory=list)
+    # Maps each real-data planet-input field to the source_id backing it.
+    # Fields with no real source are absent (the UI renders them disabled).
+    signal_provenance: dict[str, str] = Field(default_factory=dict)

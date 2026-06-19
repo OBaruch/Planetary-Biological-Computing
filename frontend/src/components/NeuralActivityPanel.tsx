@@ -8,11 +8,14 @@ function labelAction(action: string) {
 export function NeuralActivityPanel({ frame }: { frame: SimulationFrame }) {
   const metrics = frame.neural_metrics;
   const signal = frame.encoded_signal;
+  const dominantChannelGroup = metrics.dominant_channel_group.replaceAll("_", " ");
+  const decodedAction = labelAction(frame.decoded_action.primary_action);
+
   return (
     <section className="panel neural-panel" aria-label="Simulated neural activity">
       <div className="panel-heading">
         <span>Simulated Neural Activity</span>
-        <strong>{metrics.dominant_channel_group.replaceAll("_", " ")}</strong>
+        <strong title={dominantChannelGroup}>{dominantChannelGroup}</strong>
       </div>
       <div className="neural-kpis">
         <div>
@@ -39,7 +42,7 @@ export function NeuralActivityPanel({ frame }: { frame: SimulationFrame }) {
       <MetricBar label="Recovery Signal" value={metrics.recovery_signal} tone="cool" />
       <div className="intent-box">
         <span>Current Decoded Action</span>
-        <strong>{labelAction(frame.decoded_action.primary_action)}</strong>
+        <strong title={decodedAction}>{decodedAction}</strong>
         <small>
           Intent {signal.intensity.toFixed(2)} / {signal.burst_frequency.toFixed(1)} Hz / {signal.target_channels.length} channels
         </small>

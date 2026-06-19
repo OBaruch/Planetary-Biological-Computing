@@ -7,7 +7,9 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.events import router as events_router
 from app.api.routes import router
+from app.api.sources import router as sources_router
 from app.api.websocket import LiveBroadcaster
 from app.config import load_settings
 from app.services.simulation_runner import SimulationRunner
@@ -46,6 +48,8 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(events_router)
+app.include_router(sources_router)
 
 
 @app.websocket("/ws/live")

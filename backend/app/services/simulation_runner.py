@@ -13,8 +13,10 @@ from app.models.api import ConfigResponse, DemoEventRequest, SessionSummary, Sim
 from app.models.neural import DecodedAction, NeuralMetrics, StimulationIntent
 from app.models.planet import PlanetState, SimulationFrame
 from app.services.cortical_simulator_adapter import CorticalSimulatorAdapter
+from app.services.data_sources import CredentialStore, SignalService, SourceRegistry, derive_geo_signals
 from app.services.encoder import PlanetEncoder
 from app.services.fallback_synthetic_adapter import FallbackSyntheticAdapter
+from app.services.geo_events import GeoEventService
 from app.services.neural_adapter import NeuralAdapter
 from app.services.planet_data import PlanetDataProvider
 from app.services.planet_simulation import PlanetSimulation
@@ -36,10 +38,14 @@ class SimulationRunner:
         self.broadcaster = broadcaster
         self.logger = SessionLogger(settings)
         self.session_id = self.logger.session_id
-        self.provider = PlanetDataProvider(use_live_data=settings.use_live_data)
+        self.credentials = CredentialStore(settings.credentials_path)
+        self.registry = SourceRegistry(self.credentials)
+        self.provider = PlanetDataProvider(data_mode=settings.data_mode)
         self.encoder = PlanetEncoder()
         self.decoder = SpikeDecoder(window_seconds=1 / settings.ticks_per_second)
         self.simulation = PlanetSimulation()
+        self.geo_events = GeoEventService(self.registry, data_mode=settings.data_mode)
+        self.signals = SignalService(self.registry)
         self.adapter: NeuralAdapter | None = None
         self.history: deque[SimulationFrame] = deque(maxlen=settings.history_limit)
         self.latest: SimulationFrame = self._idle_frame()
@@ -117,8 +123,10 @@ class SimulationRunner:
         if was_running:
             await self.stop()
         async with self._lock:
-            self.provider = PlanetDataProvider(use_live_data=self.settings.use_live_data)
+            self.provider = PlanetDataProvider(data_mode=self.settings.data_mode)
             self.simulation = PlanetSimulation()
+            self.geo_events = GeoEventService(self.registry, data_mode=self.settings.data_mode)
+            self.signals = SignalService(self.registry)
             self.history.clear()
             self._tick = 0
             self._last_error = None
@@ -131,6 +139,23 @@ class SimulationRunner:
         message = self.provider.inject_event(event)
         logger.info("[GAIA] Demo event injected type=%s intensity=%.2f", event.type, event.intensity)
         return message
+
+    async def rebuild_sources(self) -> None:
+        """Refresh connectors after a credential/toggle change.
+
+        Active connectors are derived live from the registry, so we just force
+        a refresh (in the background) so newly enabled sources appear promptly
+        without blocking the settings request.
+        """
+
+        async def _refresh() -> None:
+            try:
+                await self.geo_events.refresh_live(force=True)
+                await self.signals.refresh(force=True)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("[GAIA] Source rebuild refresh failed: %s", exc)
+
+        asyncio.create_task(_refresh(), name="gaia-source-rebuild")
 
     async def get_state(self) -> SimulationFrame:
         async with self._lock:
@@ -173,6 +198,7 @@ class SimulationRunner:
         return ConfigResponse(
             version=self.settings.app_version,
             gaia_mode=self.settings.gaia_mode,
+            data_mode=self.settings.data_mode,
             ticks_per_second=self.settings.ticks_per_second,
             history_limit=self.settings.history_limit,
             use_live_data=self.settings.use_live_data,
@@ -208,6 +234,8 @@ class SimulationRunner:
         while self._running:
             started = asyncio.get_running_loop().time()
             try:
+                await self.geo_events.maybe_refresh()
+                await self.signals.maybe_refresh()
                 frame = self._step_once()
                 async with self._lock:
                     self.latest = frame
@@ -222,10 +250,31 @@ class SimulationRunner:
             elapsed = asyncio.get_running_loop().time() - started
             await asyncio.sleep(max(0.0, interval - elapsed))
 
+    def _planet_inputs_and_geo(self):
+        """Resolve planet inputs + geolocated events for the current mode.
+
+        Live mode overlays real signals (connectors + geo-derived) onto a
+        neutral baseline and records provenance. Demo mode uses the synthetic
+        provider and simulation-derived demo markers.
+        """
+        if self.settings.data_mode == "demo":
+            planet_inputs = self.provider.next()
+            events_geo = self.geo_events.current(planet_inputs)
+            return planet_inputs, events_geo, {}
+
+        events_geo = self.geo_events.current()
+        overlay = self.signals.overlay
+        provenance = self.signals.provenance
+        geo_fields, geo_prov = derive_geo_signals(events_geo, self.registry.active_ids())
+        overlay.update(geo_fields)
+        provenance.update(geo_prov)
+        planet_inputs = self.provider.next(overlay, provenance)
+        return planet_inputs, events_geo, provenance
+
     def _step_once(self) -> SimulationFrame:
         assert self.adapter is not None
         self._tick += 1
-        planet_inputs = self.provider.next()
+        planet_inputs, events_geo, signal_provenance = self._planet_inputs_and_geo()
         intent = self.encoder.encode(planet_inputs)
         self.adapter.send_stimulation_intent(intent, planet_inputs)
         read_started = time.perf_counter()
@@ -255,10 +304,12 @@ class SimulationRunner:
             decoded_action=action,
             planet_state=planet_state,
             events=events,
+            events_geo=events_geo,
+            signal_provenance=signal_provenance,
         )
 
     def _idle_frame(self) -> SimulationFrame:
-        planet_inputs = self.provider.next()
+        planet_inputs, events_geo, signal_provenance = self._planet_inputs_and_geo()
         intent = self.encoder.encode(planet_inputs)
         metrics = NeuralMetrics(
             spikes_per_second=0,
@@ -285,6 +336,8 @@ class SimulationRunner:
             decoded_action=action,
             planet_state=self.simulation.state,
             events=[ETHICS_TEXT],
+            events_geo=events_geo,
+            signal_provenance=signal_provenance,
         )
 
     def _frame_events(self, active_events: list[str], action: DecodedAction, planet_state: PlanetState) -> list[str]:
