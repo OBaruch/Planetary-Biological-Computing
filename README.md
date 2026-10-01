@@ -1,260 +1,282 @@
 # GAIA-1: Earth Dreams
 
-**The first neuron-ready planetary simulator.**
+> **A neuron-ready planetary simulator:** live planetary signals are encoded into stimulation intents, simulated neural spikes are decoded back into metaphorical actions, and a digital Earth evolves on a real-time 3D dashboard.
 
-Live planetary signals encoded into simulated neural activity, decoded back into a living digital Earth.
+**Status:** Local MVP / Proof of Concept · **Origin:** Personal project (technical and artistic experiment) · **Period:** June 2026
 
-GAIA-1 is a local MVP for a scientific/artistic technology demo. It connects synthetic or optional live planetary signals to stimulation intents, reads simulated neural spikes through the Cortical Labs CL SDK Simulator when available, decodes those spikes into metaphorical planet-control actions, and streams a changing digital Earth to a realtime dashboard.
+> [!IMPORTANT]
+> **Simulator mode: no real neurons are connected.** GAIA-1 runs on the Cortical Labs CL SDK *Simulator* (or on a synthetic fallback). It does not demonstrate biological learning, consciousness, sentience, thought, or emotion. Channel groups and decoded actions are visualization metaphors, not neuroscience claims. See [Ethics and Limitations](docs/ETHICS_AND_LIMITATIONS.md).
 
-## What This Is
+---
 
-GAIA-1 is a **neuron-ready prototype built with the Cortical Labs CL SDK Simulator, designed for future deployment to real biological neural networks through CL1/Cortical Cloud**.
+## Table of Contents
 
-It includes:
+- [Project Overview](#project-overview)
+- [Project Context](#project-context)
+- [Problem Statement](#problem-statement)
+- [Objective](#objective)
+- [Original Implementation](#original-implementation)
+- [Repository Structure](#repository-structure)
+- [Technologies](#technologies)
+- [How It Works](#how-it-works)
+- [Architecture](#architecture)
+- [Inputs and Outputs](#inputs-and-outputs)
+- [Running the Project](#running-the-project)
+- [Configuration](#configuration)
+- [API Reference](#api-reference)
+- [Real Data Sources](#real-data-sources)
+- [Tests](#tests)
+- [Documentation](#documentation)
+- [Historical Note](#historical-note)
+- [References](#references)
 
-- FastAPI backend with REST and WebSocket endpoints.
-- Cortical Labs simulator adapter using `import cl`, `cl.open()`, `neurons.loop(...)`, `tick.analysis.spikes`, optional `record()`, and optional data streams.
-- Deterministic fallback adapter for machines without `cl-sdk`.
-- Real-data planetary layer: per-user API keys configured from an in-app Settings panel, with 10 live connectors (7 key-free) and a strict mode that shows only the sources you have activated. A `demo` mode keeps the legacy offline mock signals.
-- Planet encoder, spike decoder, planet simulation, local session logging.
-- Vite + React + TypeScript dashboard with a Three.js Earth visualization.
-- Basic backend tests.
-- Operational status/config/session endpoints and developer smoke-test scripts.
+---
 
-## What This Is Not
+## Project Overview
 
-This MVP is **not connected to real neurons**. It does **not** demonstrate biological learning, consciousness, sentience, suffering, thought, or emotion. The channel groups and decoded actions are visualization metaphors, not scientific claims about neural meaning.
+GAIA-1 is a full-stack prototype made of a **FastAPI backend** and a **React + Three.js dashboard**. At a configurable tick rate (10 ticks per second by default), the backend:
 
-The Cortical Labs CL SDK Simulator generates non-learning control data and does not respond causally to stimulation. GAIA-1 records stimulation intents for future CL1/Cortical Cloud adaptation, but in simulator mode those intents should not be interpreted as driving real neural behavior.
+1. collects **planetary signals** (earthquakes, wildfires, air quality, news tone, geomagnetic activity, and more) from public APIs or from a synthetic demo generator;
+2. **encodes** them into a `StimulationIntent` (target channels on a 64-channel array, intensity, burst frequency);
+3. reads **spikes** from a neural adapter: the Cortical Labs CL SDK Simulator when it is installed, or a deterministic synthetic fallback;
+4. **decodes** the spikes into neural metrics and a metaphorical "planet action" (e.g. `cool_planet`, `restore_biosphere`, `amplify_chaos`);
+5. **evolves** a digital planet state and streams each frame over a WebSocket to the dashboard, where a rotating 3D globe shows geolocated events.
+
+The architecture keeps the neural hardware behind a single `NeuralAdapter` interface. The stated intent is to connect it to real biological neural networks through Cortical Labs CL1 / Cortical Cloud **in the future**, and only after safety and ethics review.
+
+## Project Context
+
+| Aspect | Finding | Evidence level |
+| --- | --- | --- |
+| Project type | **Personal Project**: a technical and artistic **Proof of Concept / MVP** | Inferred from the docs ("local MVP for a scientific/artistic technology demo"; "educational, experimental, artistic, and technical") |
+| Academic context | No university, course, or assignment is referenced anywhere | Confirmed (absence of evidence) |
+| Author | Baruch Lopez (sole author in git history) | Confirmed |
+| Development period | 16–18 June 2026 (3 commits + 1 merged PR) | Confirmed (git history) |
+| Maturity | MVP; roadmap phases 2–6 not started | Confirmed ([ROADMAP](docs/ROADMAP.md)) |
+
+More detail is in [docs/project-context.md](docs/project-context.md).
+
+## Problem Statement
+
+The project explores one question: *what would it look like to close a loop between a living planet and a (biological) neural network?* Bio-computing hardware such as Cortical Labs CL1 needs a software architecture that can:
+
+- turn heterogeneous, real-world planetary data into structured stimulation patterns;
+- read and interpret neural activity in real time;
+- make the whole loop visible and understandable to an audience;
+- stay **honest** about what the system is and is not doing while real neurons are absent.
+
+## Objective
+
+Build a runnable, local, **neuron-ready** simulator. It exercises the complete loop (data → encoding → neural adapter → decoding → planet simulation → visualization) with the official CL SDK Simulator, so that a future real-hardware adapter can replace the simulator without redesigning the rest of the system.
+
+## Original Implementation
+
+> This repository preserves the original implementation of the project. The source code has intentionally not been refactored or modernized in order to retain the historical context and original development approach.
+>
+> The source code represents the original implementation developed as a personal project.
+
+Known issues, inconsistencies, and improvement ideas are recorded separately in [docs/possible-improvements.md](docs/possible-improvements.md). None of them have been applied to the code.
+
+## Repository Structure
+
+```text
+.
+├── README.md                  # This file (portfolio-oriented overview)
+├── .env.example               # Backend + frontend environment template
+├── Makefile                   # Unix shortcuts: backend / frontend / test
+├── backend/                   # FastAPI application (Python)
+│   ├── app/
+│   │   ├── main.py            # App factory, CORS, routers, /ws/live
+│   │   ├── config.py          # Environment-driven Settings
+│   │   ├── api/               # REST routers + WebSocket broadcaster
+│   │   ├── models/            # Pydantic data contracts
+│   │   └── services/          # Encoder, decoder, adapters, simulation, data sources
+│   │       ├── data_sources/  # Source catalog, credential store, registry, signal connectors
+│   │       └── geo_events/    # Geolocated event connectors + normalizer + demo events
+│   ├── data/                  # Runtime output folders (logs, sessions, recordings), gitignored contents
+│   ├── tests/                 # pytest suite (44 tests)
+│   └── requirements.txt
+├── frontend/                  # Vite + React + TypeScript + Three.js dashboard
+│   ├── public/textures/earth/ # Optional photographic Earth textures (README inside)
+│   └── src/                   # App, API clients, hooks, panels, 3D visuals
+├── scripts/                   # Environment check, backend launcher, smoke test (Py + PowerShell)
+└── docs/
+    ├── README.md              # Documentation index
+    ├── project-context.md     # Origin, scope, timeline
+    ├── code-overview.md       # File-by-file walkthrough of the code
+    ├── possible-improvements.md
+    ├── ARCHITECTURE.md        # Original architecture notes
+    ├── ETHICS_AND_LIMITATIONS.md
+    ├── ROADMAP.md
+    ├── sdlc/                  # intent.md, spec.md, plan.md (reconstructed)
+    └── original/              # Snapshot of the original README
+```
+
+The code layout was **kept as it was** on purpose. `backend/app/config.py` resolves paths relative to the repository root, and the `Makefile`, scripts, and tests depend on this layout. Moving source files would have required code changes.
+
+## Technologies
+
+Everything below comes from `backend/requirements.txt`, `frontend/package.json`, or imports in the source code.
+
+| Layer | Technologies |
+| --- | --- |
+| Backend | Python (the PowerShell script targets 3.12), FastAPI, Uvicorn, Pydantic v2, python-dotenv, httpx (async HTTP connectors) |
+| Neural interface | Cortical Labs **CL SDK Simulator** (`cl-sdk`, imported as `cl`), which is optional at runtime |
+| Frontend | React 19, TypeScript 5, Vite, Three.js, `@react-three/fiber`, `@react-three/drei`, `lucide-react` |
+| Transport | REST (JSON) + WebSocket (`/ws/live`) |
+| Persistence | Local JSONL session logs; local JSON credential file (gitignored); optional CL SDK HDF5 recordings |
+| Testing | pytest + FastAPI `TestClient` |
+| Tooling | Makefile, PowerShell and Python helper scripts |
+
+## How It Works
+
+Each tick of the simulation loop (`backend/app/services/simulation_runner.py`) does the following:
+
+```text
+PlanetInputs ─► PlanetEncoder ─► StimulationIntent ─► NeuralAdapter ─► spikes
+                                                           │
+PlanetState ◄─ PlanetSimulation ◄─ DecodedAction ◄─ SpikeDecoder ◄──┘
+     │
+     └─► SimulationFrame ─► history deque ─► JSONL log ─► WebSocket broadcast
+```
+
+- **Planet inputs.** There are two data modes.
+  - `live` (default, strict): starts from a neutral baseline and overlays only values that come from sources the user has activated. It records **provenance** (which source backs each field).
+  - `demo`: generates the original synthetic sine-wave signals. You can bias them with injectable demo events (heatwave, wildfire, conflict, and so on).
+- **Encoding.** Eight normalized variables form a signature. The signature maps to channels in four 16-channel groups. Intensity is driven by planetary stress and missing recovery potential.
+- **Neural adapter.** `CorticalSimulatorAdapter` uses `cl.open()`, `neurons.loop(...)`, and `tick.analysis.spikes`, with optional recording and data streams. `FallbackSyntheticAdapter` produces deterministic pseudo-random spikes biased toward the intent's target channels.
+- **Decoding.** Spike counts per channel group (`climate_regulation`, `biosphere_recovery`, `human_pressure`, `chaos_stress`) give entropy, synchrony, burstiness, stability, chaos, and recovery signals. The dominant group selects a metaphorical action vector.
+- **Planet simulation.** Eight planet variables move toward targets through linear interpolation with small seeded noise. A mood label (for example "regenerative pulse") is derived from the result.
+
+The complete walkthrough is in [docs/code-overview.md](docs/code-overview.md).
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A["Planet Data Layer"] --> B["Planet Encoder"]
-    B --> C["Neural Adapter"]
-    C --> D["Spike Decoder"]
-    D --> E["Planet Simulation"]
-    E --> F["FastAPI REST + WebSocket"]
-    F --> G["React / Three.js Dashboard"]
-    E --> H["Session Logger"]
+    subgraph Sources["Planet Data Layer"]
+      S1["Signal connectors<br/>(Open-Meteo, GDELT, NOAA SWPC,<br/>OpenWeather, OpenAQ)"]
+      S2["Geo-event connectors<br/>(USGS, EONET, GDACS, ISS, FIRMS)"]
+      S3["Demo generator<br/>(GAIA_DATA_MODE=demo)"]
+    end
+    REG["SourceRegistry +<br/>CredentialStore"] --> S1 & S2
+    S1 & S2 & S3 --> P["PlanetDataProvider"]
+    P --> E["PlanetEncoder"] --> A["NeuralAdapter<br/>(CL SDK Simulator | Fallback)"]
+    A --> D["SpikeDecoder"] --> SIM["PlanetSimulation"]
+    SIM --> R["SimulationRunner"]
+    R --> L["SessionLogger (JSONL)"]
+    R --> API["FastAPI REST + /ws/live"]
+    API --> UI["React / Three.js dashboard"]
 ```
 
-### Backend Layers
+The original, shorter architecture notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). They predate the real-data sources layer.
 
-- `PlanetDataProvider`: generates offline planetary signals and derived scores. Optional live connector hooks are prepared but mock mode is the reliable default.
-- `PlanetEncoder`: normalizes planet variables into stimulation intents with target channels, intensity, burst frequency, and a signature.
-- `NeuralAdapter`: common interface for simulator/fallback implementations.
-- `CorticalSimulatorAdapter`: attempts to use `cl-sdk` and the official `cl` API surface.
-- `FallbackSyntheticAdapter`: deterministic synthetic spikes when `cl-sdk` is missing and fallback is allowed.
-- `SpikeDecoder`: converts spikes into visualization metrics and metaphorical actions.
-- `PlanetSimulation`: evolves the digital planet state.
-- `SimulationRunner`: controls start/stop/reset, history, WebSocket broadcast, and JSONL logging.
+## Inputs and Outputs
 
-## Install
+| Kind | What | Where |
+| --- | --- | --- |
+| Input | Environment configuration | `.env` (template: `.env.example`) |
+| Input | Per-user API keys (FIRMS, OpenWeather, OpenAQ) | Settings panel in the UI → `backend/data/credentials.json` (gitignored), or `GAIA_KEY_<SOURCE>_<FIELD>` env vars |
+| Input | Public planetary APIs | See [Real Data Sources](#real-data-sources) |
+| Input | Optional Earth textures | `frontend/public/textures/earth/` |
+| Output | Real-time `SimulationFrame` stream | `WS /ws/live`, `GET /api/state`, `GET /api/history` |
+| Output | Session logs (one JSON frame per line) | `backend/data/sessions/*.jsonl` and `backend/data/logs/*.jsonl` |
+| Output | Optional CL SDK recordings | `backend/data/recordings/` |
 
-Backend:
+The repository does not ship any recorded sessions or generated outputs. Only `.gitkeep` placeholders exist in `backend/data/`.
+
+## Running the Project
+
+The commands below come from the original README, `Makefile`, and `scripts/`. During this documentation pass, the backend test suite passed, and the frontend type-checked and built after `npm install`.
+
+**Backend** (from the repository root):
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .\.venv\Scripts\Activate.ps1
 pip install -r backend/requirements.txt
 uvicorn app.main:app --reload --port 8000 --app-dir backend
 ```
 
-Windows PowerShell:
+`requirements.txt` lists `cl-sdk`. If the Cortical Labs SDK cannot be installed on your machine, the backend still runs in **Fallback Synthetic Mode** as long as `GAIA_ALLOW_FALLBACK=true` (the default).
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
-uvicorn app.main:app --reload --port 8000 --app-dir backend
-```
-
-Frontend:
+**Frontend:**
 
 ```bash
 cd frontend
-npm install
+npm install        # note: `npm ci` fails because package-lock.json is out of sync (see possible-improvements)
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+Then open <http://localhost:5173>. The dashboard starts the simulation automatically when it loads.
 
-If `5173` is already in use, Vite can run on another port such as `5174`; the backend CORS defaults allow both.
-
-## Scripts
-
-PowerShell helpers are included:
-
-```powershell
-.\scripts\run_backend.ps1
-.\scripts\run_frontend.ps1
-```
-
-Python helpers:
+**Helpers:**
 
 ```bash
-python scripts/check_env.py
-python scripts/run_backend.py
-python scripts/smoke_test.py
+python scripts/check_env.py     # report which dependencies are importable
+python scripts/run_backend.py   # uvicorn with simulator + fallback defaults
+python scripts/smoke_test.py    # exercise a running backend end-to-end
+make backend | make frontend | make test
 ```
 
-Unix-like systems can use the `Makefile`:
-
-```bash
-make backend
-make frontend
-make test
-```
+On Windows PowerShell you can use `.\scripts\run_backend.ps1` and `.\scripts\run_frontend.ps1`.
 
 ## Configuration
 
-Copy `.env.example` to `.env` and adjust as needed.
+Copy `.env.example` to `.env`. The main variables are:
 
-Important values:
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `GAIA_MODE` | `simulator` | `simulator` tries the CL SDK; `fallback` forces the synthetic adapter |
+| `GAIA_ALLOW_FALLBACK` | `true` | Use the synthetic adapter if the CL SDK fails to start |
+| `GAIA_DATA_MODE` | `live` | `live` = strict real data; `demo` = original synthetic planet + demo globe events |
+| `GAIA_TICKS_PER_SECOND` | `10` | Loop rate (clamped to 1–30) |
+| `GAIA_HISTORY_LIMIT` | `1000` | In-memory frame history size |
+| `GAIA_LOG_TO_FILE` | `true` | Write JSONL session logs |
+| `GAIA_AUTOSTART` | `false` | Start the loop when the backend starts |
+| `GAIA_ENABLE_CL_RECORDING` / `GAIA_CL_RECORDING_SECONDS` | `false` / `0` | CL SDK recordings |
+| `GAIA_ENABLE_CL_DATA_STREAM` | `true` | Publish `gaia_earth_dreams_state` data stream to the CL SDK |
+| `GAIA_ENABLE_CL_STIMULATION` | `false` | Keep stimulation as logged intent only |
+| `GAIA_USE_LIVE_DATA` | `false` | Legacy flag, only reported by `/api/config` |
+| `CORS_ORIGINS` | ports 5173/5174 on localhost | Allowed frontend origins |
+| `CL_SDK_*` | see `.env.example` | CL SDK simulator options (seed, visualisation, time, spike visibility) |
+| `VITE_API_BASE_URL`, `VITE_WS_URL` | `http://localhost:8000`, `ws://localhost:8000/ws/live` | Frontend endpoints |
 
-- `GAIA_MODE=simulator`: prefer the Cortical Labs CL SDK Simulator.
-- `GAIA_ALLOW_FALLBACK=true`: use deterministic fallback if `cl-sdk` is unavailable.
-- `GAIA_DATA_MODE=live`: strict real-data mode (only configured sources are shown). Set `demo` for the legacy simulated planet + demo globe events.
-- `GAIA_USE_LIVE_DATA=false`: legacy flag retained for compatibility; per-source activation now controls live data.
-- `GAIA_TICKS_PER_SECOND=10`: frontend-friendly realtime update rate.
-- `GAIA_ENABLE_CL_RECORDING=false`: turn on only when you want CL SDK HDF5 recordings.
-- `GAIA_ENABLE_CL_DATA_STREAM=true`: attempts to publish `gaia_earth_dreams_state`.
-- `GAIA_ENABLE_CL_STIMULATION=false`: keep stimulation as logged intent only in this MVP.
+## API Reference
 
-CL SDK simulator values:
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/`, `/health` | Identity, ethics notice, health, and mode |
+| GET | `/api/status`, `/api/config`, `/api/sessions` | Runner status, effective config, recent session files |
+| GET | `/api/state`, `/api/history?limit=` | Latest frame / recent frames |
+| POST | `/api/control/start` · `stop` · `reset` | Loop lifecycle |
+| POST | `/api/control/demo-event` | Inject a demo event (`{type, intensity, duration_seconds}`) |
+| GET | `/api/events/live?refresh=` | Geolocated events for the globe |
+| GET | `/api/sources` | Source catalog with per-user state (masked credentials only) |
+| PUT / DELETE | `/api/sources/{id}/credentials` | Save / remove a source's keys |
+| POST | `/api/sources/{id}/toggle` · `/test` | Enable or disable a source / run one live fetch |
+| WS | `/ws/live` | Streams every `SimulationFrame` |
 
-- `CL_SDK_RANDOM_SEED=42`
-- `CL_SDK_VISUALISATION=1`
-- `CL_SDK_ACCELERATED_TIME=0`
-- `CL_SDK_SPIKE_VISIBILITY=1`
-
-## API
-
-- `GET /`
-- `GET /health`
-- `GET /api/status`
-- `GET /api/state`
-- `GET /api/history?limit=200`
-- `GET /api/config`
-- `GET /api/sessions`
-- `POST /api/control/start`
-- `POST /api/control/stop`
-- `POST /api/control/reset`
-- `POST /api/control/demo-event`
-- `GET /api/events/live` — current geolocated events from the user's active sources. In `live` mode this is strictly real data (no demo fallback); in `demo` mode it returns simulated events. Add `?refresh=true` to force a live refresh.
-- `GET /api/sources` — full data-source catalog with per-user state (configured / enabled / active, masked credentials, last health). Never returns raw secrets.
-- `PUT /api/sources/{id}/credentials` — save a source's API key(s) and enable it.
-- `DELETE /api/sources/{id}/credentials` — remove a source's stored key.
-- `POST /api/sources/{id}/toggle` — enable/disable a source.
-- `POST /api/sources/{id}/test` — run one live fetch to confirm what real data the credentials reach.
-- `WS /ws/live` — each `SimulationFrame` carries `events_geo` (geolocated events for the globe) and `signal_provenance` (which planet-input fields are backed by a real source).
-
-Demo event body:
-
-```json
-{
-  "type": "wildfire",
-  "intensity": 0.8,
-  "duration_seconds": 30
-}
-```
-
-Allowed event types:
-
-- `wildfire`
-- `earthquake`
-- `heatwave`
-- `good_news`
-- `conflict`
-- `renewable_boost`
-- `ocean_recovery`
-- `pollution_spike`
-- `biodiversity_gain`
-- `solar_storm`
-
-## Real-Time Earth Globe
-
-The dashboard centerpiece is `RealTimeEarthGlobe` (`frontend/src/components/Visuals/`):
-a rotating, interactive 3D Earth with atmosphere, drifting clouds, a star field,
-and geolocated event markers (pulses, particles, arcs) that react to planet
-state, simulated neural metrics, and decoded actions.
-
-Event sources are merged by priority and de-duplicated by id:
-
-1. `events_geo` embedded in the WebSocket `SimulationFrame`.
-2. `GET /api/events/live` (polled while no WebSocket events).
-3. Local demo events (`frontend/src/data/demoGeoEvents.ts`) — always available.
-
-**Real data (per-user API keys):** GAIA-1 runs in strict **live mode** by
-default. Open the **Data Sources** button (gear, top-right) to connect real
-planetary sensors with *your own* credentials. The globe and "Live Sensors"
-panel show **only** the sources you have activated — anything unconfigured is
-visibly disabled, never faked. Keys are stored locally in
-`backend/data/credentials.json` (gitignored) and never leave your backend; the
-API only ever exposes masked values. Set `GAIA_DATA_MODE=demo` to restore the
-legacy simulated planet + demo globe events.
-
-See [Real Data Sources](#real-data-sources) for the full list. Several work with
-**no key at all** (USGS, NASA EONET, GDACS, ISS, Open-Meteo, GDELT, NOAA SWPC),
-so the globe lights up with real events out of the box.
-
-**Earth textures:** the globe ships with a procedural canvas Earth so it works
-with zero assets. To use photographic textures, drop them in
-`frontend/public/textures/earth/` (see that folder's `README.md` for filenames
-and public-domain NASA sources).
+Demo event types: `wildfire`, `earthquake`, `heatwave`, `good_news`, `conflict`, `renewable_boost`, `ocean_recovery`, `pollution_spike`, `biodiversity_gain`, `solar_storm`.
 
 ## Real Data Sources
 
-Each user connects their own sensors from the in-app **Data Sources** panel. The
-catalog is declarative (`backend/app/services/data_sources/catalog.py`) — adding
-a source is one catalog entry plus one connector following the existing
-`GeoEventConnector` / `SignalConnector` protocol.
+The catalog is declarative (`backend/app/services/data_sources/catalog.py`). Ten sources ship, and seven of them need no key:
 
-v1 ships 10 sources:
+| Source | Kind | Key | Feeds |
+| --- | --- | --- | --- |
+| USGS Earthquakes | globe markers | none | earthquake markers, `earthquake_frequency`, `earthquake_magnitude` |
+| NASA EONET | globe markers | none | wildfire / storm / volcano markers |
+| GDACS | globe markers | none | disaster alerts |
+| ISS (wheretheiss.at) | globe marker | none | live ISS position |
+| NASA FIRMS | globe markers | `MAP_KEY` | active fires, `wildfire_risk_index` |
+| Open-Meteo | signals | none | `air_quality_index`, `precipitation_index` |
+| OpenWeatherMap | signals | API key | `air_quality_index` |
+| OpenAQ | signals | API key | `air_quality_index` (ground stations) |
+| GDELT | signals | none | news tension, sentiment, conflict, cooperation |
+| NOAA SWPC | signals | none | `storm_intensity_index` (Kp) |
 
-| Source | Category | Type | Key | Feeds |
-| --- | --- | --- | --- | --- |
-| USGS Earthquakes | geophysics | globe markers | none | earthquakes |
-| NASA EONET | geophysics | globe markers | none | wildfires/storms/volcanoes |
-| GDACS | geophysics | globe markers | none | disaster alerts |
-| ISS | movement | globe marker | none | live ISS position |
-| NASA FIRMS | geophysics | globe markers | **MAP_KEY** | active fires, wildfire risk |
-| Open-Meteo | atmosphere | signals | none | air quality, precipitation |
-| OpenWeatherMap | atmosphere | signals | **API key** | air quality |
-| OpenAQ | atmosphere | signals | **API key** | air quality (ground stations) |
-| GDELT | society | signals | none | news tension/sentiment/conflict |
-| NOAA SWPC | space | signals | none | geomagnetic storm (Kp) |
-
-Where to get the keys: FIRMS `MAP_KEY` →
-<https://firms.modaps.eosdis.nasa.gov/api/map_key/>, OpenWeather →
-<https://home.openweathermap.org/users/sign_up>, OpenAQ →
-<https://explore.openaq.org/register>. The "Test connection" button in Settings
-runs a real fetch so you can confirm what data a key reaches before relying on it.
-
-The remaining catalog (NWS alerts, Smithsonian volcanoes, Electricity Maps, EIA,
-OpenSky, AISStream, NASA DONKI, ReliefWeb, GBIF, Cloudflare Radar, WAQI, IQAir…)
-is added incrementally the same way.
-
-## Troubleshooting
-
-- If `cl-sdk` is unavailable, set `GAIA_ALLOW_FALLBACK=true`; the backend will report `Fallback Synthetic Mode`.
-- If the CL SDK simulator reports timing jitter, lower `GAIA_TICKS_PER_SECOND` or keep `CL_SDK_VISUALISATION=0` for backend demos.
-- If the frontend cannot connect, check `VITE_API_BASE_URL`, `VITE_WS_URL`, and CORS origins.
-- If port `5173` is occupied, run `npm run dev -- --port 5174`.
-- If `/api/state` returns tick `0`, call `POST /api/control/start` or use the frontend Start button.
-
-## Logs And Recordings
-
-Each backend run creates a `session_id`. When `GAIA_LOG_TO_FILE=true`, states are written as JSONL under:
-
-- `backend/data/logs/`
-- `backend/data/sessions/`
-
-If CL SDK recording is enabled and supported by the local simulator, recordings are directed to:
-
-- `backend/data/recordings/`
+Keys are entered in the dashboard's **Data Sources** panel. They are stored only on the local backend, and the API only ever returns masked values.
 
 ## Tests
 
@@ -262,32 +284,25 @@ If CL SDK recording is enabled and supported by the local simulator, recordings 
 pytest backend/tests
 ```
 
-The tests cover health/state endpoints, mock planet data generation, encoder output ranges, decoder behavior with fake spikes, simulation steps, and demo event injection.
+There are 44 tests covering health and state endpoints, controls, encoder ranges, the decoder, simulation steps, the fallback adapter, planet data, geo-event normalization, the source registry, credentials, signal connectors, and the sources API. The test configuration forces fallback + demo mode so that no network access is needed.
 
-## Future CL1 / Cortical Cloud Adaptation
+## Documentation
 
-The backend intentionally isolates neural hardware concerns behind `NeuralAdapter`. A future real deployment should add a dedicated adapter that:
+| Document | Content |
+| --- | --- |
+| [docs/README.md](docs/README.md) | Documentation index |
+| [docs/project-context.md](docs/project-context.md) | Origin, motivation, scope, timeline |
+| [docs/code-overview.md](docs/code-overview.md) | What each module does and how the files relate |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Original architecture notes |
+| [docs/ETHICS_AND_LIMITATIONS.md](docs/ETHICS_AND_LIMITATIONS.md) | Original ethics statement |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Original six-phase roadmap |
+| [docs/sdlc/intent.md](docs/sdlc/intent.md) · [spec.md](docs/sdlc/spec.md) · [plan.md](docs/sdlc/plan.md) | Intent, specification, and plan reconstructed from the existing artifacts |
+| [docs/possible-improvements.md](docs/possible-improvements.md) | Findings, **not applied** |
+| [docs/original/](docs/original/) | Snapshot of the original README |
 
-- Authenticates/deploys through the available CL1 or Cortical Cloud workflow.
-- Converts `StimulationIntent` into reviewed `ChannelSet`, `StimDesign`, `BurstDesign`, or stimulation plans.
-- Applies biological safety constraints, rate limits, recording policies, and experiment approval gates.
-- Treats every visualization label as UI metaphor unless validated by a real scientific protocol.
+## Historical Note
 
-The current simulator adapter already keeps the same high-level flow: open `cl`, loop over ticks, read spikes, log intents, and optionally create data streams/recordings.
-
-## Roadmap
-
-- Add real public data connectors for climate, earthquakes, wildfire, air quality, and news sentiment.
-- Add replay mode for CL SDK recordings.
-- Add exportable demo sessions with charts.
-- Add a Cloud/CL1 adapter once access and deployment details are available.
-- Add stronger experiment-safety review controls before any real biological stimulation.
-
-More detail:
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Ethics And Limitations](docs/ETHICS_AND_LIMITATIONS.md)
-- [Roadmap](docs/ROADMAP.md)
+This repository was later reorganized and documented to improve readability and preserve the historical context of the original project. The original source code remains unchanged. The earlier README is preserved verbatim in [docs/original/README-original.md](docs/original/README-original.md).
 
 ## References
 
